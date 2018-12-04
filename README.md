@@ -13,7 +13,7 @@ A sqlite3 + socket.io + zmq proxy, meant for readonly access to databases that a
 Assuming you have bitcoind running on `bitcoin_zmq_endpoint` on port 8833, run with docker:
 
     docker build -t gosqliteproxy:latest .
-    docker run -v /path/to/yourdb/:/data:ro -p 5000 gosqliteproxy:latest gosqliteproxy :5000 /data/database.sqlite?immutable=1 bitcoin_zmq_endpoint:8833
+    docker run -v /path/to/yourdb/:/data:ro -p 5000:5000 gosqliteproxy:latest gosqliteproxy :5000 /data/database.sqlite?immutable=1 bitcoin_zmq_endpoint:8833
 
 Important to note: Mounting volumes this way makes it read-only, so any change to the database is impossible.
 

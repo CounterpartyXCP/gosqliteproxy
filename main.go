@@ -7,6 +7,8 @@ import (
   "encoding/hex"
   _ "github.com/mattn/go-sqlite3"
   "log"
+  "strings"
+  "strconv"
 	"net/http"
 	"github.com/googollee/go-socket.io"
   "github.com/vaughan0/go-zmq"
@@ -135,12 +137,28 @@ func main() {
       checkErr(err)
       defer db.Close()
 
+      seq := -1
+
+      if strings.HasPrefix(msg, "/*") {
+        idx := strings.Index(msg, "*/")
+
+        if idx >= 0 {
+          n, err := strconv.Atoi(msg[2:idx])
+
+          if err == nil {
+            seq = n
+          }
+
+          msg = msg[idx + 2:]
+        }
+      }
+
       b, err := queryToJson(db, msg) // Super insecure if DB isn't readonly, which is our case
       if err != nil {
         so.Emit("chat message", "Error: " + err.Error())
       } else {
         query := string(b[:])
-        so.Emit("chat message", query)
+        so.Emit("chat message", strconv.Itoa(seq) + "|" + query)
       }
   	})
     so.On("join", func(room string) {

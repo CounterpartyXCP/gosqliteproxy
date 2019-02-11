@@ -45,6 +45,9 @@
       socket.on('chat message', function(msg){
         $('#messages').empty()
         try {
+          var seq = msg.substring(0, msg.indexOf('|'))
+          console.log('seq', seq)
+          msg = msg.substring(msg.indexOf('|') + 1)
           var ob = JSON.parse(msg)
           if (ob) {
             $('#messages').jsonView(ob)

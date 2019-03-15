@@ -195,7 +195,7 @@ func main() {
   })
 
   go server.Serve()
-	defer server.Close()
+  defer server.Close()
 
   http.Handle("/socket.io/", server)
   http.Handle("/", http.FileServer(http.Dir("./asset")))

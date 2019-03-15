@@ -121,6 +121,9 @@ func zmqwatch(endpoint string, blockhash chan<- string, txhash chan<- string) {
 }
 
 func main() {
+
+  log.Println("Running....")
+
   if len(os.Args) < 4 {
     panic("Needs 3 parameters: addr:port db_path zeromq_url")
   }
@@ -129,68 +132,78 @@ func main() {
   if err != nil {
   	log.Fatal(err)
   }
+
   blockhash, txhash := make(chan string), make(chan string)
-  server.On("connection", func(so socketio.Socket) {
+
+  server.OnConnect("/", func(s socketio.Conn) error {
+
+    s.SetContext("")
   	log.Println("client connected")
-  	so.On("chat message", func(msg string) {
-      db, err := sql.Open("sqlite3", os.Args[2])
-      checkErr(err)
-      defer db.Close()
 
-      seq := -1
-
-      if strings.HasPrefix(msg, "/*") {
-        idx := strings.Index(msg, "*/")
-
-        if idx >= 0 {
-          n, err := strconv.Atoi(msg[2:idx])
-
-          if err == nil {
-            seq = n
-          }
-
-          msg = msg[idx + 2:]
+    go func(block <-chan string, tx <-chan string) {
+      for {
+        select {
+        case bhx := <-block:
+          s.Emit("blocks", "hashblock", bhx)
+        case thx := <-tx:
+          s.Emit("txs", "hashtx", thx)
         }
       }
+    }(blockhash, txhash)
 
-      b, err := queryToJson(db, msg) // Super insecure if DB isn't readonly, which is our case
-      if err != nil {
-        so.Emit("chat message", "Error: " + err.Error())
-      } else {
-        query := string(b[:])
-        so.Emit("chat message", strconv.Itoa(seq) + "|" + query)
-      }
-  	})
-    so.On("join", func(room string) {
-      so.Join(room)
-    })
-    so.On("leave", func(room string) {
-      so.Leave(room)
-    })
-  	so.On("disconnection", func() {
-  		log.Println("client disconnected")
-  	})
+    return nil
+
   })
-  server.On("error", func(so socketio.Socket, err error) {
+
+  server.OnEvent("/", "chat message", func(so socketio.Conn, msg string) {
+    db, err := sql.Open("sqlite3", os.Args[2])
+    checkErr(err)
+    defer db.Close()
+
+    seq := -1
+
+    if strings.HasPrefix(msg, "/*") {
+      idx := strings.Index(msg, "*/")
+
+      if idx >= 0 {
+        n, err := strconv.Atoi(msg[2:idx])
+
+        if err == nil {
+          seq = n
+        }
+
+        msg = msg[idx + 2:]
+      }
+    }
+
+    b, err := queryToJson(db, msg) // Super insecure if DB isn't readonly, which is our case
+    if err != nil {
+      so.Emit("chat message", "Error: " + err.Error())
+    } else {
+      query := string(b[:])
+      so.Emit("chat message", strconv.Itoa(seq) + "|" + query)
+    }
+  })
+
+
+  server.OnDisconnect("/", func(s socketio.Conn, msg string) {
+    log.Println("client disconnected")
+  })
+
+  server.OnError("error", func(err error) {
   	log.Println("error:", err)
   })
 
-  go func(block <-chan string, tx <-chan string) {
-    for {
-      select {
-      case bhx := <-block:
-        server.BroadcastTo("blocks", "hashblock", bhx)
-      case thx := <-tx:
-        server.BroadcastTo("txs", "hashtx", thx)
-      }
-    }
-  }(blockhash, txhash)
+  go server.Serve()
+  defer server.Close()
 
   http.Handle("/socket.io/", server)
   http.Handle("/", http.FileServer(http.Dir("./asset")))
   log.Println("Serving at", os.Args[1])
   go zmqwatch(os.Args[3], blockhash, txhash)
   log.Fatal(http.ListenAndServe(os.Args[1], nil))
+
+
 }
 
 func checkErr(err error) {

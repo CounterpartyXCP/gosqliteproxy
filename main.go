@@ -190,8 +190,8 @@ func main() {
     log.Println("client disconnected")
   })
 
-  server.OnError("error", func(err error) {
-  	log.Println("error:", err)
+  server.OnError("error", func(s socketio.Conn, err error) {
+    log.Println("error:", err)
   })
 
   go server.Serve()
